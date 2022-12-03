@@ -17,7 +17,7 @@ from external_sort.threads import Threads
 from external_sort.reader import Reader, StrTup, ReaderGen
 
 
-def sort_hub(src: list[str], type_data: StrTup,
+def sort_hub(src: list[str], type_data: StrTup = None,
              output: Optional[str] = None, reverse: bool = False,
              nflows: Optional[int] = None, cmp: Optional[Callable] = None,
              keys: Optional[tuple[str, ...]] = None, delimiter: str = ',') \
@@ -66,8 +66,8 @@ def sort_hub(src: list[str], type_data: StrTup,
 
     if total == 1:
         # Если всего один src
-        split_series(src[0], type_data, Reader(delimiter, src[0], output), output,
-                     reverse, cmp, keys)
+        split_series(src[0], type_data, Reader(delimiter, src[0], output),
+                     output, reverse, cmp, keys)
     elif output:
         # Если есть output и несколько src, невозожно всем
         #   потокам писать в данный output. Сперва сливаем все в один файл,
@@ -224,6 +224,7 @@ def split_series(src: str, type_data: StrTup, rdr: Reader,
     except StopIteration:
         rdr.close_all()
         rdr.delete_tmp()
+        Reader.delete_dir()
         return  # Пустой файл игнорируется (для тестов)
 
     rdr.write_line(rdr.tmp_files[0], buf)
@@ -254,5 +255,6 @@ def split_series(src: str, type_data: StrTup, rdr: Reader,
             pathlib.Path(output).touch()
             shutil.copy2(rdr.tmp_path[0], output)
         rdr.delete_tmp()
+        Reader.delete_dir()
         Threads.done(src)  # данный поток закончил сортировку
         return

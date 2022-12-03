@@ -6,6 +6,7 @@
     - ReaderGen - генератор полученный из ридера
 """
 
+import ast
 import os
 import csv
 import string
@@ -14,7 +15,7 @@ import traceback
 from typing import TextIO, Union, Optional, Generator
 
 
-StrTup = Union[tuple[str, ...], str]
+StrTup = Optional[Union[tuple[str, ...], str]]
 ReaderGen = Generator[Union[int, float, str], None, None]
 
 
@@ -126,7 +127,10 @@ class Reader:
         """
 
         if not os.path.exists("temp"):
-            os.mkdir("temp")
+            try:
+                os.mkdir("temp")
+            except FileExistsError:
+                pass
         self.tmp_files = [open(i, 'w', newline='') for i in self.tmp_path]
 
     def open_tmp_r(self):
@@ -163,7 +167,15 @@ class Reader:
         if self.tmp_files:
             for file in self.tmp_path:
                 os.remove(file)
+
+    @staticmethod
+    def delete_dir() -> None:
+        """Функция, удаляющая временную папку."""
+
+        try:
             os.rmdir("temp")
+        except (FileNotFoundError, OSError):
+            pass
 
     def write_line(self, file: TextIO, elem: Union[str, int, float],
                    which: int = 0) -> None:
@@ -225,6 +237,22 @@ class Reader:
               "\nFile contents do not conform given dtype.")
         exit(1)
 
+    @staticmethod
+    def _auto_cast(string: str) -> str:
+        """
+        Метод, подбирающий тип данных для прочитанной строки, если изначально
+            тип не был передан.
+
+        :param string: прочитанная строка
+        :return: код типа
+        """
+
+        try:
+            expect = type(ast.literal_eval(string))
+        except (ValueError, SyntaxError):
+            expect = str
+        return 'i' if expect == int else ('f' if expect == float else 's')
+
     def _txt_gen(self, f: TextIO, dtype: StrTup) -> ReaderGen:
         """
         Генератор для .txt файлов.
@@ -235,6 +263,8 @@ class Reader:
         """
 
         for line in f.readlines():
+            if not dtype:
+                dtype = self._auto_cast(line)
             try:
                 yield self._cast(line, dtype)
             except ValueError:
@@ -254,14 +284,33 @@ class Reader:
         :return: генератор
         """
 
-        # Если типов меньше или больше чем ключей => ValueError
-        # Если тип всего 1 => каждое поле будет приводится к нему
-        if len(dtype) == 1:
+        def _auto_cast_csv() -> tuple[str, ...]:
+            """
+            Функция, определяющая типы для сортируемых полей, если типы
+                не переданы.
+
+            :return: список найденных предположительных типов
+            """
+
+            exp_types = []
+            for key, val in line.items():
+                if key in keys:
+                    exp_types.append(self._auto_cast(val))
+            return tuple(exp_types)
+
+        # if dtype and keys:
+        if dtype and len(dtype) == 1:
+            # Если тип всего 1 => каждое поле будет приводится к нему
             dtype = [dtype[0] for _ in keys]
-        elif len(dtype) < len(keys) or len(dtype) > len(keys):
+        elif dtype and keys and (len(dtype) < len(keys) or len(dtype) > len(keys)):
+            # Если типов меньше или больше чем ключей => ValueError
             raise ValueError(f"Number of types is not equal to number of keys")
 
         for line in csv.DictReader(f, delimiter=self.delimiter_csv):
+            if not keys:
+                keys = tuple(line.keys())
+            if not dtype:
+                dtype = _auto_cast_csv()
             try:
                 to_yield = []
                 i = 0  # индекс типа, к которому необходимо сделать каст
