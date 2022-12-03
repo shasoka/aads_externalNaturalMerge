@@ -115,7 +115,7 @@ class Reader:
         - first_split
         - delimiter_csv
         - header_csv
-        - files_w_header
+        - has_header
         - buf_row_csv
 
     Методы:
@@ -139,25 +139,25 @@ class Reader:
         - merge_src
     """
 
-    def __init__(self, ext: str, delimiter: str = ',', src: str = None) \
+    # Общее расщирение файлов.
+    ext = None
+
+    def __init__(self, delimiter: str = ',', src: str = None) \
         -> None:
         """
         Параметризованный конструктор класса Reader.
 
-        :param ext: расширение src файла
         :param delimiter: разделитель для .csv файла
         :param src: src файл
         """
 
-        self.ext = ext
-
         self.src_path = src
         self.out_path = None
         self.tmp_path = [
-            "temp/" + ''.join(random.choices(string.ascii_uppercase +
-                                             string.digits, k=10)) + ext,
-            "temp/" + ''.join(random.choices(string.ascii_uppercase +
-                                             string.digits, k=10)) + ext
+            "temp/" + ''.join(random.choices(string.ascii_uppercase + string.
+                                             digits, k=10)) + Reader.ext,
+            "temp/" + ''.join(random.choices(string.ascii_uppercase + string.
+                                             digits, k=10)) + Reader.ext
         ]
 
         self.out_file = None
@@ -167,11 +167,11 @@ class Reader:
 
         self.delimiter_csv = delimiter
         self.header_csv = None
-        self.files_w_header = []
+        self.has_header = []
         self.buf_row_csv = {0: None, 1: None}
 
-    @staticmethod
-    def check_extension(src: str, out: str) -> str:
+    @classmethod
+    def check_extension(cls, src: str, out: str) -> str:
         """
         Метод, проверяющий расширения полученных файлов.
 
@@ -187,7 +187,7 @@ class Reader:
             if file and not file.endswith(ext):
                 raise ValueError(f"Each file must be {ext}")
         # Если расширение прошло проверку
-        return ext
+        cls.ext = ext
 
     def open_tmp_w(self) -> None:
         """
@@ -252,9 +252,9 @@ class Reader:
             file.write(str(elem) + '\n')
         else:
             writer = csv.DictWriter(file, self.header_csv, delimiter=self.delimiter_csv)
-            if file not in self.files_w_header:
+            if file not in self.has_header:
                 writer.writeheader()
-                self.files_w_header.append(file)
+                self.has_header.append(file)
             writer.writerow(self.buf_row_csv[which])
 
     def create_tmp_generators(self, type: StrTup, keys: tuple[str, ...]) \
@@ -372,7 +372,7 @@ class Reader:
             return self._txt_gen(f, type)
         else:
             # Обнуление списка файлов, в которых уже есть хедер
-            self.files_w_header = []
+            self.has_header = []
             return self._csv_gen(f, type, keys, which)
 
     @staticmethod
@@ -457,12 +457,13 @@ def natural_merge(src: list[str], type_data: Union[str, tuple[str, ...]],
         for i, s in enumerate(src):
             Threads.tasks[s] = \
                 Thread(target=split_series,
-                       args=(src[i], type_data, Reader(ext, delimiter, src[i]),
+                       args=(src[i], type_data, Reader(delimiter, src[i]),
                              output, reverse, cmp, keys))
         Threads.bound_workers()
 
     # Проверка расширений полученных файлов
-    ext = Reader.check_extension(src, output)
+    # ext = Reader.check_extension(src, output)
+    Reader.check_extension(src, output)
 
     # Создание словаря потоков
     Threads.tasks = dict.fromkeys(src, False)
@@ -472,14 +473,14 @@ def natural_merge(src: list[str], type_data: Union[str, tuple[str, ...]],
 
     if total == 1:
         # Если всего один src
-        split_series(src[0], type_data, Reader(ext, delimiter, src[0]), output,
+        split_series(src[0], type_data, Reader(delimiter, src[0]), output,
                      reverse, cmp, keys)
     elif output:
         # Если есть output и несколько src, невозожно всем
         #   потокам писать в данный output. Сперва сливаем все в один файл,
         #   затем сортируем этот файл.
-        Reader(ext, delimiter).merge_src(src, output, type_data, delimiter)
-        split_series(output, type_data, Reader(ext, delimiter, output), None,
+        Reader(delimiter).merge_src(src, output, type_data, delimiter)
+        split_series(output, type_data, Reader(delimiter, output), None,
                      reverse, cmp, keys)
         return
     elif nflows is None or nflows >= total:
@@ -496,7 +497,7 @@ def natural_merge(src: list[str], type_data: Union[str, tuple[str, ...]],
                 next = Threads.get_free()
                 Threads.tasks[next] = Thread(target=split_series,
                                              args=(next, type_data,
-                                                   Reader(ext, delimiter,
+                                                   Reader(delimiter,
                                                           next),
                                                    output, reverse, cmp, keys))
             Threads.bound_workers()
