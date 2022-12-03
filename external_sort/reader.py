@@ -302,7 +302,8 @@ class Reader:
         if dtype and len(dtype) == 1:
             # Если тип всего 1 => каждое поле будет приводится к нему
             dtype = [dtype[0] for _ in keys]
-        elif dtype and keys and (len(dtype) < len(keys) or len(dtype) > len(keys)):
+        elif dtype and keys and (len(dtype) < len(keys) or len(dtype) >
+                                 len(keys)):
             # Если типов меньше или больше чем ключей => ValueError
             raise ValueError(f"Number of types is not equal to number of keys")
 
