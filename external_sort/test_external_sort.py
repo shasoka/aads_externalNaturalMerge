@@ -5,7 +5,7 @@ import os
 import unittest
 import shutil
 
-from main import natural_merge as my_sort  # pylint: disable=E0401
+from external_sort.sort import sort_hub as my_sort  # pylint: disable=E0401
 
 TEST_NUMBER = [
     [],
@@ -184,7 +184,6 @@ class TestExternalSortOneFile(unittest.TestCase):
                         exit_lst.append(float(ptr.readline()))
                 self.assertEqual(exit_lst, sorted(data, reverse=True))
 
-
     def tearDown(self) -> None:
         """Действия после окончания теста."""
         shutil.rmtree(self.dir_name)
@@ -220,7 +219,7 @@ class TestExternalSortCSVFile(unittest.TestCase):
                     src=[self.file_name],
                     output="",
                     reverse=False,
-                    keys=(key, ),
+                    keys=key,
                     type_data="i",
                 )
                 exit_file = []
@@ -234,6 +233,7 @@ class TestExternalSortCSVFile(unittest.TestCase):
     def tearDown(self) -> None:
         """Действия после окончания теста."""
         shutil.rmtree(self.dir_name)
+
 
 class TestExternalSortTwoFile(unittest.TestCase):
     """Тест-кейс модуля my_sort c двумя файлами."""
