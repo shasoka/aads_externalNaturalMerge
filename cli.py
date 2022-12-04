@@ -4,14 +4,46 @@
 
 Модуль-CLI для скрипта внешней сортировки слиянием.
 """
-
+import functools
 import os
-from typing import Optional
+import random
+import time
+from typing import Optional, Callable
 
 import click
 
 from external_sort.reader import StrTup
 from external_sort.sort import sort_hub
+
+
+def timer(func: Callable) -> Callable:
+    """
+    Декоратор, вычисляющий время работы обернутой функции.
+    """
+
+    palette = [
+        "yellow",
+        "green",
+        "red",
+        "blue",
+        "cyan",
+        "magenta",
+    ]
+
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs) -> Callable:
+        """
+        Таймер-обертка.
+        """
+
+        start = time.perf_counter()
+        function = func(*args, **kwargs)
+        end = time.perf_counter()
+        click.secho(f"\nRan in: {(end - start):.10f} seconds\n",
+                    fg=random.choice(palette))
+        return function
+
+    return wrapper
 
 
 @click.command()
@@ -32,6 +64,7 @@ from external_sort.sort import sort_hub
                    " occur by all keys.")
 @click.option("--delimiter", "-d", type=str, default=',', help="Delimiter for "
                                                                ".csv table.")
+@timer
 def cli(src: list[str], type_data: StrTup, output: Optional[str],
         reverse: Optional[bool], nflows: Optional[int],
         keys: Optional[tuple[str, ...]], delimiter: str) -> None:
@@ -60,7 +93,6 @@ def cli(src: list[str], type_data: StrTup, output: Optional[str],
                     "keys!", fg="yellow")
 
     sort_hub(src, type_data, output, reverse, nflows, None, keys, delimiter)
-    click.secho("-/ DONE /-", fg="green")
 
 
 if __name__ == '__main__':

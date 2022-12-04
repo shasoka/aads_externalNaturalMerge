@@ -11,7 +11,6 @@ import os
 import csv
 import string
 import random
-import traceback
 from typing import TextIO, Union, Optional, Generator
 
 
@@ -53,7 +52,7 @@ class Reader:
         - write_line
         - create_tmp_generators
         - _cast
-        - _content_error
+        - tear_down
         - _txt_gen
         - _csv_gen
         - generator
@@ -156,7 +155,7 @@ class Reader:
         """Метод, закрывающий все открытые файлы ридера."""
 
         if self.tmp_files:
-            self.tmp_files = [i.close() if not i.closed else i for i in
+            self.tmp_files = [i.close() if i and not i.closed else i for i in
                               self.tmp_files]
         if self.out_file:
             self.out_file = self.out_file.close()
@@ -176,6 +175,16 @@ class Reader:
             os.rmdir("temp")
         except (FileNotFoundError, OSError):
             pass
+
+    def tear_down(self) -> None:
+        """
+        Метод, вызываемый при экстренном завершении работы. Затирает следы
+            работы скрипта.
+        """
+
+        self.close_all()
+        self.delete_tmp()
+        Reader.delete_dir()
 
     def write_line(self, file: TextIO, elem: Union[str, int, float],
                    which: int = 0) -> None:
@@ -228,15 +237,6 @@ class Reader:
         elif dtype == 'f':
             return float(item)
 
-    def _content_error(self) -> None:
-        """Метод обрабатывающий исключение, возникающее в методе _cast."""
-
-        self.close_all()
-        self.delete_tmp()
-        print(traceback.format_exc() +
-              "\nFile contents do not conform given dtype.")
-        exit(1)
-
     @staticmethod
     def _auto_cast(string: str) -> str:
         """
@@ -268,7 +268,8 @@ class Reader:
             try:
                 yield self._cast(line, dtype)
             except ValueError:
-                self._content_error()
+                self.tear_down()
+                raise ValueError("File contents do not conform given dtype.")
         f.close()
 
     def _csv_gen(self, f, dtype: StrTup, keys: tuple[str, ...], which: int) ->\
@@ -305,6 +306,7 @@ class Reader:
         elif dtype and keys and (len(dtype) < len(keys) or len(dtype) >
                                  len(keys)):
             # Если типов меньше или больше чем ключей => ValueError
+            self.tear_down()
             raise ValueError(f"Number of types is not equal to number of keys")
 
         for line in csv.DictReader(f, delimiter=self.delimiter_csv):
@@ -327,11 +329,13 @@ class Reader:
                     self.header_csv = list(line.keys())
                     for key in keys:
                         if key not in self.header_csv:
+                            self.tear_down()
                             raise KeyError(f"Can't find given key: {key}. "
-                                           f"Available keys: {keys}")
+                                           f"Available keys: {self.header_csv}")
                 yield to_yield
             except ValueError:
-                self._content_error()
+                self.tear_down()
+                raise ValueError("File contents do not conform given dtype.")
         f.close()
 
     def generator(self, f: TextIO, dtype: StrTup,

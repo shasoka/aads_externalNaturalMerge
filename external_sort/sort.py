@@ -21,7 +21,7 @@ def sort_hub(src: list[str], type_data: StrTup = None,
              output: Optional[str] = None, reverse: bool = False,
              nflows: Optional[int] = None, cmp: Optional[Callable] = None,
              keys: Optional[tuple[str, ...]] = None, delimiter: str = ',') \
-    -> None:
+    -> Optional[int]:
     """
     Функция, обрабатывающая переданные на сортировку файлы, определяет их
         расширения, по необходимости запускает многопоточную сортировку.
@@ -61,6 +61,12 @@ def sort_hub(src: list[str], type_data: StrTup = None,
     if keys and not isinstance(keys, tuple):
         keys = (keys, )
 
+    # Из cli type_data - tuple. В .txt моде возможен только один тип
+    if len(type_data) > 1 and Reader.ext == '.txt':
+        raise ValueError("In .txt mode only one type_data parameter allowed")
+    elif len(type_data) == 1 and Reader.ext == '.txt':
+        type_data = type_data[0]
+
     # Вычисление числа задач (файлов для сортировки)
     total = len(src)
 
@@ -77,8 +83,8 @@ def sort_hub(src: list[str], type_data: StrTup = None,
                      reverse, cmp, keys)
         return
     elif nflows is None or nflows >= total:
-        # Если несколько src и либо не задано число потоков, либо число потоков
-        #   превышает число src
+        # Если несколько src и либо не задано число потоков, либо число
+        #   потоков превышает число src
         _equals()
     else:
         # Если потоков дано меньше, чем src
@@ -88,10 +94,14 @@ def sort_hub(src: list[str], type_data: StrTup = None,
                 # Пока не все выделенные потоки в работе
                 # В цикле всегда 0 < работников <= nflows
                 nxt = Threads.get_free()
-                Threads.tasks[nxt] = Thread(target=split_series,
-                                            args=(nxt, type_data,
-                                                  Reader(delimiter, nxt),
-                                                  output, reverse, cmp, keys))
+                if nxt:
+                    Threads.tasks[nxt] = Thread(target=split_series,
+                                                args=(nxt, type_data,
+                                                      Reader(delimiter, nxt),
+                                                      output, reverse, cmp,
+                                                      keys))
+                else:
+                    break
             Threads.bound_workers()
 
 
@@ -222,9 +232,7 @@ def split_series(src: str, type_data: StrTup, rdr: Reader,
     try:
         buf = next(row_generator)
     except StopIteration:
-        rdr.close_all()
-        rdr.delete_tmp()
-        Reader.delete_dir()
+        rdr.tear_down()
         return  # Пустой файл игнорируется (для тестов)
 
     rdr.write_line(rdr.tmp_files[0], buf)
