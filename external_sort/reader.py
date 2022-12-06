@@ -165,7 +165,10 @@ class Reader:
 
         if self.tmp_files:
             for file in self.tmp_path:
-                os.remove(file)
+                try:
+                    os.remove(file)
+                except (FileNotFoundError, OSError):
+                    pass
 
     @staticmethod
     def delete_dir() -> None:
@@ -220,8 +223,7 @@ class Reader:
         return self.generator(open(self.tmp_path[0], "r"), dtype, keys, 0), \
             self.generator(open(self.tmp_path[1], "r"), dtype, keys, 1)
 
-    @staticmethod
-    def _cast(item: str, dtype: str) -> Union[int, float, str]:
+    def _cast(self, item: str, dtype: str) -> Union[int, float, str]:
         """
         Метод, приводящий значение из файла к необходимому типу.
 
@@ -233,7 +235,10 @@ class Reader:
         if dtype == 'i':
             return int(item)
         elif dtype == 's':
-            return item.replace('\n', '')
+            if item:
+                return item.replace('\n', '')
+            self.tear_down()
+            raise ValueError("File contents do not conform given dtype.")
         elif dtype == 'f':
             return float(item)
 
@@ -295,7 +300,9 @@ class Reader:
 
             exp_types = []
             for key, val in line.items():
+                print(line)
                 if key in keys:
+                    print(val)
                     exp_types.append(self._auto_cast(val))
             return tuple(exp_types)
 
